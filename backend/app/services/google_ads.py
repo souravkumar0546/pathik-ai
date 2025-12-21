@@ -5,6 +5,9 @@ from google.auth.exceptions import TransportError
 import requests
 import urllib3
 
+from app.errors.exceptions import ExternalServiceError
+
+
 class GoogleAdsService:
     def __init__(self):
         if not all([
@@ -15,7 +18,9 @@ class GoogleAdsService:
             Config.GOOGLE_ADS_LOGIN_CUSTOMER_ID,
             Config.GOOGLE_ADS_CUSTOMER_ID,
         ]):
-            raise RuntimeError("Google Ads credentials are not fully configured")
+            raise ExternalServiceError(
+                "Google Ads credentials are not fully configured"
+            )
 
         self.customer_id = Config.GOOGLE_ADS_CUSTOMER_ID
 
@@ -27,16 +32,16 @@ class GoogleAdsService:
             "login_customer_id": Config.GOOGLE_ADS_LOGIN_CUSTOMER_ID,
             "use_proto_plus": True,
         })
-    
-    def raise_google_error(self, ex: GoogleAdsException):
+
+    def handle_google_exception(self, ex: GoogleAdsException):
         messages = [
             f"{error.error_code}: {error.message}"
             for error in ex.failure.errors
         ]
-        raise RuntimeError(" | ".join(messages)) from ex
-    
-    def raise_network_error(self, ex: Exception):
-        raise RuntimeError("Google Ads service unavailable") from ex
+        raise ExternalServiceError(" | ".join(messages)) from ex
+
+    def handle_network_exception(self, ex: Exception):
+        raise ExternalServiceError("Google Ads service unavailable") from ex
 
     def create_campaign_budget(self, daily_budget_micros: int, name: str):
         try:
@@ -58,9 +63,9 @@ class GoogleAdsService:
             return response.results[0].resource_name
 
         except GoogleAdsException as ex:
-            self.raise_google_error(ex)
+            self.handle_google_exception(ex)
         except (TransportError, requests.exceptions.RequestException, urllib3.exceptions.HTTPError) as ex:
-            self.raise_network_error(ex)
+            self.handle_network_exception(ex)
 
 
     def create_paused_campaign(self, name: str, budget_resource_name: str):
@@ -83,9 +88,9 @@ class GoogleAdsService:
 
             return response.results[0].resource_name
         except GoogleAdsException as ex:
-            self.raise_google_error(ex)
+            self.handle_google_exception(ex)
         except (TransportError, requests.exceptions.RequestException, urllib3.exceptions.HTTPError) as ex:
-            self.raise_network_error(ex)
+            self.handle_network_exception(ex)
         
     def create_ad_group(self, campaign_resource_name: str, ad_group_name: str):
         try:
@@ -106,9 +111,9 @@ class GoogleAdsService:
             return response.results[0].resource_name
 
         except GoogleAdsException as ex:
-            self.raise_google_error(ex)
+            self.handle_google_exception(ex)
         except (TransportError, requests.exceptions.RequestException, urllib3.exceptions.HTTPError) as ex:
-            self.raise_network_error(ex)
+            self.handle_network_exception(ex)
 
     def create_responsive_search_ad(
         self,
@@ -145,9 +150,9 @@ class GoogleAdsService:
             return response.results[0].resource_name
 
         except GoogleAdsException as ex:
-            self.raise_google_error(ex)
+            self.handle_google_exception(ex)
         except (TransportError, requests.exceptions.RequestException, urllib3.exceptions.HTTPError) as ex:
-            self.raise_network_error(ex)
+            self.handle_network_exception(ex)
         
     def pause_campaign(self, campaign_resource_name: str):
         try:

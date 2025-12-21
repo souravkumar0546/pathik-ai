@@ -1,5 +1,6 @@
 from flask import Blueprint, request, jsonify
 from app.services.campaign_service import CampaignService
+from app.errors.exceptions import ValidationError
 
 campaigns_bp = Blueprint("campaigns", __name__, url_prefix="/api/campaigns")
 
@@ -9,19 +10,16 @@ def create_campaign():
     data = request.get_json()
 
     if not data:
-        return jsonify({"error": "Invalid JSON"}), 400
+        raise ValidationError("Invalid JSON body")
 
-    try:
-        campaign = CampaignService.create_campaign(data)
+    campaign = CampaignService.create_campaign(data)
 
-        return jsonify({
-            "id": str(campaign.id),
-            "status": campaign.status
-        }), 201
+    return jsonify({
+        "id": str(campaign.id),
+        "status": campaign.status
+    }), 201
 
-    except KeyError as e:
-        return jsonify({"error": f"Missing field: {str(e)}"}), 400
-    
+
 @campaigns_bp.route("", methods=["GET"])
 def list_campaigns():
     campaigns = CampaignService.list_campaigns()
@@ -40,33 +38,23 @@ def list_campaigns():
         for c in campaigns
     ]), 200
 
+
 @campaigns_bp.route("/<uuid:campaign_id>/publish", methods=["POST"])
 def publish_campaign(campaign_id):
-    try:
-        campaign = CampaignService.publish_campaign(campaign_id)
+    campaign = CampaignService.publish_campaign(campaign_id)
 
-        return jsonify({
-            "id": str(campaign.id),
-            "status": campaign.status,
-            "google_campaign_id": campaign.google_campaign_id
-        }), 200
+    return jsonify({
+        "id": str(campaign.id),
+        "status": campaign.status,
+        "google_campaign_id": campaign.google_campaign_id
+    }), 200
 
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except RuntimeError as e:
-        return jsonify({"error": str(e)}), 502
-    
+
 @campaigns_bp.route("/<uuid:campaign_id>/pause", methods=["POST"])
 def pause_campaign(campaign_id):
-    try:
-        campaign = CampaignService.pause_campaign(campaign_id)
+    campaign = CampaignService.pause_campaign(campaign_id)
 
-        return jsonify({
-            "id": str(campaign.id),
-            "status": campaign.status,
-        }), 200
-
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except RuntimeError as e:
-        return jsonify({"error": str(e)}), 502
+    return jsonify({
+        "id": str(campaign.id),
+        "status": campaign.status
+    }), 200

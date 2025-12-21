@@ -1,6 +1,7 @@
 from flask import Flask,request
 from .extensions import db, migrate, cors
 from app.logging import setup_logging
+from app.errors.handlers import register_error_handlers
 
 def create_app():
     app = Flask(__name__)
@@ -26,5 +27,6 @@ def create_app():
 
     from .routes.campaigns import campaigns_bp
     app.register_blueprint(campaigns_bp, url_prefix="/api/campaigns")
+    register_error_handlers(app)
 
     return app
