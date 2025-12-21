@@ -63,20 +63,10 @@ class CampaignService:
         try:
             google_ads = GoogleAdsService()
 
-            budget_resource = google_ads.create_campaign_budget(
+            google_campaign_resource = google_ads.publish_search_campaign_atomic(
+                campaign_name=campaign.name,
                 daily_budget_micros=campaign.daily_budget * 1_000_000,
-                name=f"{campaign.name} Budget",
-            )
-            google_campaign_resource = google_ads.create_paused_campaign(
-                name=campaign.name,
-                budget_resource_name=budget_resource,
-            )
-            ad_group_resource = google_ads.create_ad_group(
-                campaign_resource_name=google_campaign_resource,
                 ad_group_name=campaign.ad_group_name,
-            )
-            google_ads.create_responsive_search_ad(
-                ad_group_resource_name=ad_group_resource,
                 headline=campaign.ad_headline,
                 description=campaign.ad_description,
                 final_url=campaign.asset_url or "https://example.com",

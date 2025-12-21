@@ -43,6 +43,119 @@ class GoogleAdsService:
     def handle_network_exception(self, ex: Exception):
         raise ExternalServiceError("Google Ads service unavailable") from ex
 
+    def raise_google_error(self, ex: GoogleAdsException):
+        return self.handle_google_exception(ex)
+
+    def raise_network_error(self, ex: Exception):
+        return self.handle_network_exception(ex)
+
+    def publish_search_campaign_atomic(
+            self,
+            *,
+            campaign_name: str,
+            daily_budget_micros: int,
+            ad_group_name: str,
+            headline: str,
+            description: str,
+            final_url: str,
+        ):
+        try:
+            google_ads_service = self.client.get_service("GoogleAdsService")
+
+            operations = []
+            customer = f"customers/{self.customer_id}"
+
+            budget_temp = f"{customer}/campaignBudgets/-1"
+            campaign_temp = f"{customer}/campaigns/-2"
+            ad_group_temp = f"{customer}/adGroups/-3"
+
+            budget = self.client.get_type("CampaignBudget")
+            budget.resource_name = budget_temp
+            budget.name = f"{campaign_name} Budget"
+            budget.amount_micros = daily_budget_micros
+            budget.delivery_method = (
+                self.client.enums.BudgetDeliveryMethodEnum.STANDARD
+            )
+
+            budget_op = self.client.get_type("MutateOperation")
+            budget_op.campaign_budget_operation.create = budget
+            operations.append(budget_op)
+
+            campaign = self.client.get_type("Campaign")
+            campaign.resource_name = campaign_temp
+            campaign.name = campaign_name
+            campaign.campaign_budget = budget_temp
+            campaign.status = self.client.enums.CampaignStatusEnum.PAUSED
+            campaign.advertising_channel_type = (
+                self.client.enums.AdvertisingChannelTypeEnum.SEARCH
+            )
+
+            campaign_op = self.client.get_type("MutateOperation")
+            campaign_op.campaign_operation.create = campaign
+            operations.append(campaign_op)
+
+            ad_group = self.client.get_type("AdGroup")
+            ad_group.resource_name = ad_group_temp
+            ad_group.name = ad_group_name
+            ad_group.campaign = campaign_temp
+            ad_group.status = self.client.enums.AdGroupStatusEnum.PAUSED
+            ad_group.type_ = self.client.enums.AdGroupTypeEnum.SEARCH_STANDARD
+
+            ad_group_op = self.client.get_type("MutateOperation")
+            ad_group_op.ad_group_operation.create = ad_group
+            operations.append(ad_group_op)
+
+            ad_group_ad = self.client.get_type("AdGroupAd")
+            ad_group_ad.ad_group = ad_group_temp
+            ad_group_ad.status = self.client.enums.AdGroupAdStatusEnum.PAUSED
+
+            ad = ad_group_ad.ad
+            ad.final_urls.append(final_url)
+
+            rsa = ad.responsive_search_ad
+
+            h1 = self.client.get_type("AdTextAsset")
+            h1.text = headline
+
+            h2 = self.client.get_type("AdTextAsset")
+            h2.text = f"{headline} Official"
+
+            h3 = self.client.get_type("AdTextAsset")
+            h3.text = "Get Started Today"
+
+            rsa.headlines.append(h1)
+            rsa.headlines.append(h2)
+            rsa.headlines.append(h3)
+
+            d1 = self.client.get_type("AdTextAsset")
+            d1.text = description
+
+            d2 = self.client.get_type("AdTextAsset")
+            d2.text = "Simple. Fast. Reliable."
+
+            rsa.descriptions.append(d1)
+            rsa.descriptions.append(d2)
+
+            ad_op = self.client.get_type("MutateOperation")
+            ad_op.ad_group_ad_operation.create = ad_group_ad
+            operations.append(ad_op)
+
+            response = google_ads_service.mutate(
+                customer_id=self.customer_id,
+                mutate_operations=operations,
+            )
+
+            for res in response.mutate_operation_responses:
+                if res.campaign_result.resource_name:
+                    return res.campaign_result.resource_name
+
+            raise ExternalServiceError("Campaign created but resource not returned")
+
+        except GoogleAdsException as ex:
+            self.handle_google_exception(ex)
+        except (TransportError, requests.exceptions.RequestException, urllib3.exceptions.HTTPError) as ex:
+            self.handle_network_exception(ex)
+
     def create_campaign_budget(self, daily_budget_micros: int, name: str):
         try:
             budget_service = self.client.get_service("CampaignBudgetService")
@@ -135,12 +248,27 @@ class GoogleAdsService:
 
             rsa = ad.responsive_search_ad
 
-            rsa.headlines.add().text = headline
-            rsa.headlines.add().text = f"{headline} – Official"
-            rsa.headlines.add().text = "Get Started Today"
+            h1 = self.client.get_type("AdTextAsset")
+            h1.text = headline
 
-            rsa.descriptions.add().text = description
-            rsa.descriptions.add().text = "Simple. Fast. Reliable."
+            h2 = self.client.get_type("AdTextAsset")
+            h2.text = f"{headline} – Official"
+
+            h3 = self.client.get_type("AdTextAsset")
+            h3.text = "Get Started Today"
+
+            rsa.headlines.append(h1)
+            rsa.headlines.append(h2)
+            rsa.headlines.append(h3)
+
+            d1 = self.client.get_type("AdTextAsset")
+            d1.text = description
+
+            d2 = self.client.get_type("AdTextAsset")
+            d2.text = "Simple. Fast. Reliable."
+
+            rsa.descriptions.append(d1)
+            rsa.descriptions.append(d2)
 
             response = ad_group_ad_service.mutate_ad_group_ads(
                 customer_id=self.customer_id,
